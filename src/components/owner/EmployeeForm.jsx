@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { collection, doc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { createUserWithEmailAndPassword, signOut } from 'firebase/auth';
 import { getSecondaryAuth, db } from '../../firebase';
 import { COLLECTIONS, ROLES } from '../../utils/constants';

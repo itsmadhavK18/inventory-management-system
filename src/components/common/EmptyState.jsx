@@ -1,6 +1,7 @@
 import { PackageOpen } from 'lucide-react';
 
-export default function EmptyState({ icon: Icon = PackageOpen, title = 'No data', message = '' }) {
+export default function EmptyState({ icon, title = 'No data', message = '' }) {
+  const Icon = icon || PackageOpen;
   return (
     <div className="flex flex-col items-center justify-center py-12 px-4 text-center animate-fade-in">
       <div className="w-16 h-16 rounded-2xl bg-surface-light/50 flex items-center justify-center mb-4">

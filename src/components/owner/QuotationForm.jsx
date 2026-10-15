@@ -5,7 +5,7 @@ import { COLLECTIONS } from '../../utils/constants';
 import { downloadQuotationPDF } from '../../utils/pdfGenerator';
 import { Loader2, Plus, Trash2, Mail } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { useAuth } from '../../contexts/AuthContext';
+import { useAuth } from '../../contexts/useAuth';
 
 const emptyRow = { item_name: '', description: '', quantity: '', price: '' };
 
