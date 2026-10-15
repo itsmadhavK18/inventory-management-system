@@ -20,13 +20,13 @@ export default function EmployeePanel() {
   };
 
   return (
-    <div className="min-h-screen pb-safe pt-6 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-6xl mx-auto space-y-6">
+    <div className="min-h-screen pb-safe pt-6 sm:pt-8 px-4 sm:px-6 lg:px-8">
+      <div className="max-w-7xl mx-auto w-full space-y-6 sm:space-y-8">
         {/* Welcome Section */}
         <header className="glass rounded-2xl p-6 sm:p-7 border border-border/60">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            <div className="space-y-1.5">
-              <div className="flex items-center gap-2">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-5">
+            <div className="space-y-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold uppercase tracking-wider bg-accent/15 text-accent-light border border-accent/25">
                   <Wrench size={12} />
                   Staff Portal
@@ -41,6 +41,15 @@ export default function EmployeePanel() {
               <p className="text-sm text-text-muted max-w-2xl leading-relaxed">
                 Find materials and record stock usage for your jobs. Select any available item to log deductions.
               </p>
+            </div>
+
+            {/* Live Catalog Status Pill */}
+            <div className="flex items-center gap-3 self-start md:self-center bg-primary/40 border border-border/50 rounded-xl px-4 py-3 shrink-0">
+              <div className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
+              <div className="text-left">
+                <p className="text-xs font-semibold text-text">Real-time Stock Sync</p>
+                <p className="text-[11px] text-text-dim">Updates instantly on deduction</p>
+              </div>
             </div>
           </div>
         </header>

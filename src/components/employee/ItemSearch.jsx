@@ -71,59 +71,63 @@ export default function ItemSearch({ onSelect }) {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 sm:space-y-8">
       {/* Search and Category Filter Toolbar */}
-      <div className="glass rounded-2xl p-4 sm:p-5 border border-border/60 space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-          <div className="flex-1">
+      <div className="glass rounded-2xl p-4 sm:p-5 border border-border/60">
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+          {/* Search input takes full width on mobile/tablet, flexible on desktop */}
+          <div className="w-full lg:max-w-md xl:max-w-lg">
             <SearchBar
               value={search}
               onChange={setSearch}
               placeholder="Search materials, finished goods, parts..."
             />
           </div>
-          {/* Item count badge */}
-          <div className="flex items-center justify-between sm:justify-end gap-2 text-xs text-text-muted px-1">
-            <span>
-              {loading ? 'Updating stock...' : `${filtered.length} of ${items.length} items`}
-            </span>
-          </div>
-        </div>
 
-        {/* Category Filter Tabs */}
-        <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-border/30">
-          <span className="text-xs font-semibold text-text-dim flex items-center gap-1.5 mr-1">
-            <Layers size={13} />
-            Filter:
-          </span>
-          {[
-            { id: 'all', label: 'All Items', count: counts.all },
-            { id: ITEM_TYPES.RAW, label: 'Raw Materials', count: counts.raw },
-            { id: ITEM_TYPES.FINISHED, label: 'Finished Goods', count: counts.finished },
-          ].map((cat) => {
-            const isActive = selectedCategory === cat.id;
-            return (
-              <button
-                key={cat.id}
-                type="button"
-                onClick={() => setSelectedCategory(cat.id)}
-                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer ${
-                  isActive
-                    ? 'bg-accent/20 text-accent-light border border-accent/40 shadow-sm shadow-accent/10'
-                    : 'bg-primary/50 text-text-muted hover:text-text hover:bg-surface-light/50 border border-border/40'
-                }`}
-              >
-                <span>{cat.label}</span>
-                <span
-                  className={`text-[10px] px-1.5 py-0.2 rounded-full ${
-                    isActive ? 'bg-accent/30 text-accent-light' : 'bg-surface-light text-text-dim'
-                  }`}
-                >
-                  {cat.count}
-                </span>
-              </button>
-            );
-          })}
+          {/* Filter tabs and item counter */}
+          <div className="flex flex-wrap items-center justify-between sm:justify-start lg:justify-end gap-2.5">
+            <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+              <span className="text-xs font-semibold text-text-dim flex items-center gap-1.5 mr-1 hidden sm:inline-flex">
+                <Layers size={13} />
+                Filter:
+              </span>
+              {[
+                { id: 'all', label: 'All Items', count: counts.all },
+                { id: ITEM_TYPES.RAW, label: 'Raw Materials', count: counts.raw },
+                { id: ITEM_TYPES.FINISHED, label: 'Finished Goods', count: counts.finished },
+              ].map((cat) => {
+                const isActive = selectedCategory === cat.id;
+                return (
+                  <button
+                    key={cat.id}
+                    type="button"
+                    onClick={() => setSelectedCategory(cat.id)}
+                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium transition-all cursor-pointer ${
+                      isActive
+                        ? 'bg-accent/20 text-accent-light border border-accent/40 shadow-sm shadow-accent/10'
+                        : 'bg-primary/50 text-text-muted hover:text-text hover:bg-surface-light/50 border border-border/40'
+                    }`}
+                  >
+                    <span>{cat.label}</span>
+                    <span
+                      className={`text-[10px] px-1.5 py-0.2 rounded-full font-semibold ${
+                        isActive ? 'bg-accent/30 text-accent-light' : 'bg-surface-light text-text-dim'
+                      }`}
+                    >
+                      {cat.count}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Item count badge */}
+            <div className="text-xs text-text-muted px-2.5 py-1.5 rounded-xl bg-primary/40 border border-border/40 shrink-0">
+              <span>
+                {loading ? 'Updating...' : `${filtered.length} of ${items.length} items`}
+              </span>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -147,24 +151,28 @@ export default function ItemSearch({ onSelect }) {
 
       {/* Loading Skeletons */}
       {loading && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 lg:gap-6">
           {[1, 2, 3, 4, 5, 6].map((idx) => (
             <div
               key={idx}
-              className="glass rounded-2xl p-5 border border-border/40 space-y-4 animate-pulse"
+              className="glass rounded-2xl p-5 border border-border/40 space-y-4 animate-pulse flex flex-col justify-between h-[210px]"
             >
               <div className="flex items-start justify-between gap-3">
-                <div className="w-10 h-10 rounded-xl bg-surface-light/50" />
+                <div className="w-10 h-10 rounded-xl bg-surface-light/50 shrink-0" />
                 <div className="flex-1 space-y-2">
                   <div className="h-4 bg-surface-light/60 rounded-md w-3/4" />
                   <div className="h-3 bg-surface-light/40 rounded-md w-1/3" />
                 </div>
+                <div className="w-14 h-5 bg-surface-light/40 rounded-full shrink-0" />
               </div>
-              <div className="pt-2 border-t border-border/20 space-y-1.5">
-                <div className="h-3 bg-surface-light/30 rounded w-1/4" />
-                <div className="h-6 bg-surface-light/50 rounded w-1/2" />
+              <div className="pt-3 border-t border-border/20 flex justify-between items-end">
+                <div className="space-y-1">
+                  <div className="h-3 bg-surface-light/30 rounded w-16" />
+                  <div className="h-6 bg-surface-light/50 rounded w-24" />
+                </div>
+                <div className="h-5 bg-surface-light/40 rounded-full w-16" />
               </div>
-              <div className="h-9 bg-surface-light/40 rounded-xl w-full" />
+              <div className="h-10 bg-surface-light/40 rounded-xl w-full" />
             </div>
           ))}
         </div>
@@ -204,7 +212,7 @@ export default function ItemSearch({ onSelect }) {
 
       {/* Inventory Item Cards */}
       {!loading && !error && filtered.length > 0 && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 lg:gap-6">
           {filtered.map((item) => {
             const isOutOfStock = Number(item.quantity) <= 0;
             const isLowStock =
@@ -215,7 +223,7 @@ export default function ItemSearch({ onSelect }) {
             return (
               <div
                 key={item.id}
-                className={`glass rounded-2xl p-5 border flex flex-col justify-between transition-all duration-200 group ${
+                className={`glass rounded-2xl p-5 sm:p-6 border flex flex-col justify-between transition-all duration-200 group h-full ${
                   isOutOfStock
                     ? 'border-border/40 opacity-75'
                     : isLowStock
@@ -224,11 +232,11 @@ export default function ItemSearch({ onSelect }) {
                 }`}
               >
                 <div className="space-y-3.5">
-                  {/* Top: Icon, Name, Category */}
+                  {/* Top: Icon + Name on Left, Category Badge on Right */}
                   <div className="flex items-start justify-between gap-3">
-                    <div className="flex items-start gap-3 min-w-0">
+                    <div className="flex items-start gap-3 min-w-0 flex-1">
                       <div
-                        className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 transition-transform group-hover:scale-105 ${
+                        className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-transform group-hover:scale-105 ${
                           isOutOfStock
                             ? 'bg-surface-light text-text-dim'
                             : isLowStock
@@ -240,29 +248,30 @@ export default function ItemSearch({ onSelect }) {
                       >
                         <Package size={20} />
                       </div>
-                      <div className="min-w-0">
-                        <h2 className="text-sm font-semibold text-text leading-snug truncate" title={item.name}>
+                      <div className="min-w-0 flex-1">
+                        <h2 className="text-sm font-semibold text-text leading-snug line-clamp-2" title={item.name}>
                           {item.name}
                         </h2>
-                        <span
-                          className={`badge mt-1 ${
-                            item.type === ITEM_TYPES.RAW ? 'badge-raw' : 'badge-finished'
-                          }`}
-                        >
-                          {item.type || 'Standard'}
-                        </span>
                       </div>
                     </div>
+
+                    <span
+                      className={`badge shrink-0 text-[10px] font-semibold ${
+                        item.type === ITEM_TYPES.RAW ? 'badge-raw' : 'badge-finished'
+                      }`}
+                    >
+                      {item.type || 'Standard'}
+                    </span>
                   </div>
 
                   {/* Stock Metrics */}
-                  <div className="pt-2 border-t border-border/30 flex items-end justify-between">
+                  <div className="pt-3 border-t border-border/30 flex items-end justify-between gap-2">
                     <div>
                       <p className="text-[10px] font-semibold text-text-dim uppercase tracking-wider">
                         Available Stock
                       </p>
                       <p
-                        className={`text-xl font-bold tracking-tight mt-0.5 ${
+                        className={`text-2xl font-bold tracking-tight mt-0.5 ${
                           isOutOfStock
                             ? 'text-danger-light'
                             : isLowStock
@@ -278,14 +287,15 @@ export default function ItemSearch({ onSelect }) {
                     </div>
 
                     {/* Stock Status Badge */}
-                    <div className="text-right">
+                    <div className="text-right shrink-0">
                       {isOutOfStock ? (
                         <span className="badge badge-low text-[10px]">
                           Out of stock
                         </span>
                       ) : isLowStock ? (
-                        <span className="badge badge-low text-[10px]">
-                          Low (Min: {formatNumber(item.threshold)})
+                        <span className="badge badge-low text-[10px] flex items-center gap-1">
+                          <AlertTriangle size={10} />
+                          Low ({formatNumber(item.threshold)} min)
                         </span>
                       ) : (
                         <span className="badge badge-finished text-[10px] flex items-center gap-1">
@@ -303,7 +313,7 @@ export default function ItemSearch({ onSelect }) {
                     type="button"
                     onClick={() => onSelect(item)}
                     disabled={isOutOfStock}
-                    className={`w-full py-2.5 px-3 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                    className={`w-full py-2.5 px-4 rounded-xl text-xs font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer ${
                       isOutOfStock
                         ? 'bg-surface-light/40 text-text-dim border border-border/40 cursor-not-allowed opacity-60'
                         : 'btn-primary'
