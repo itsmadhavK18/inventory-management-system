@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { collection, query, where, onSnapshot } from 'firebase/firestore';
+import { collection, onSnapshot } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { COLLECTIONS } from '../../utils/constants';
 import { AlertTriangle, Package } from 'lucide-react';

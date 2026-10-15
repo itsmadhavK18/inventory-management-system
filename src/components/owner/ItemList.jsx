@@ -26,7 +26,7 @@ export default function ItemList({ onEdit }) {
     try {
       await deleteDoc(doc(db, COLLECTIONS.ITEMS, item.id));
       toast.success('Item deleted');
-    } catch (err) {
+    } catch {
       toast.error('Failed to delete');
     }
   };

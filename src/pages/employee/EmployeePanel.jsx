@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import ItemSearch from '../../components/employee/ItemSearch';
 import UpdateQuantity from '../../components/employee/UpdateQuantity';
-import { useAuth } from '../../contexts/AuthContext';
+import { useAuth } from '../../contexts/useAuth';
 
 export default function EmployeePanel() {
   const { userData } = useAuth();

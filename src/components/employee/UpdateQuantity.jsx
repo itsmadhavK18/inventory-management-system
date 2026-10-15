@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { doc, runTransaction, collection, serverTimestamp } from 'firebase/firestore';
 import { db } from '../../firebase';
 import Modal from '../common/Modal';
-import { useAuth } from '../../contexts/AuthContext';
+import { useAuth } from '../../contexts/useAuth';
 import { Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { COLLECTIONS } from '../../utils/constants';
