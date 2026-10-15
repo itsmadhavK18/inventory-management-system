@@ -62,29 +62,38 @@ export default function Navbar() {
 
           {/* Right side */}
           <div className="flex items-center gap-3">
-            <div className="hidden sm:flex items-center gap-2">
-              <div className="w-7 h-7 rounded-full bg-accent/20 flex items-center justify-center">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-full bg-accent/20 border border-accent/30 flex items-center justify-center">
                 <span className="text-xs font-bold text-accent-light">
                   {userData?.name?.charAt(0)?.toUpperCase() || '?'}
                 </span>
               </div>
-              <span className="text-xs text-text-muted">{userData?.name}</span>
+              <div className="hidden sm:flex flex-col text-left">
+                <span className="text-xs font-semibold text-text leading-tight">{userData?.name || 'User'}</span>
+                <span className="text-[10px] text-accent-light font-medium capitalize">{userData?.role || 'Staff'}</span>
+              </div>
             </div>
+
             <button
               onClick={handleLogout}
-              className="p-2 rounded-lg text-text-dim hover:text-danger hover:bg-danger/10 transition-all cursor-pointer"
-              title="Logout"
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-text-dim hover:text-danger hover:bg-danger/10 transition-all cursor-pointer text-xs font-medium"
+              title="Sign out"
+              aria-label="Sign out"
             >
-              <LogOut size={18} />
+              <LogOut size={16} />
+              <span className="hidden md:inline">Sign out</span>
             </button>
 
-            {/* Mobile menu toggle */}
-            <button
-              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="md:hidden p-2 rounded-lg text-text-muted hover:bg-surface-light/50 transition-all cursor-pointer"
-            >
-              {mobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
-            </button>
+            {/* Mobile menu toggle only if there are navigation links */}
+            {links.length > 0 && (
+              <button
+                onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+                className="md:hidden p-2 rounded-lg text-text-muted hover:bg-surface-light/50 transition-all cursor-pointer"
+                aria-label="Toggle navigation menu"
+              >
+                {mobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
+              </button>
+            )}
           </div>
         </div>
       </div>
