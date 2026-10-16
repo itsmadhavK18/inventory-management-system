@@ -1,326 +1,502 @@
-import { useState, useEffect, useMemo } from 'react';
-import { collection, query, orderBy, onSnapshot } from 'firebase/firestore';
-import { db } from '../../firebase';
-import { COLLECTIONS, ITEM_TYPES } from '../../utils/constants';
+import { useState, useMemo } from 'react';
+import { ITEM_TYPES } from '../../utils/constants';
 import { formatNumber } from '../../utils/formatters';
-import SearchBar from '../common/SearchBar';
-import EmptyState from '../common/EmptyState';
 import {
   Package,
   AlertTriangle,
-  MinusCircle,
-  RefreshCw,
-  SearchX,
-  Layers,
+  Barcode,
+  Search,
+  Keyboard,
+  MapPin,
   CheckCircle2,
+  PackageX,
+  SlidersHorizontal,
+  PlusCircle,
+  Check,
+  Layers,
 } from 'lucide-react';
 
-export default function ItemSearch({ onSelect }) {
-  const [items, setItems] = useState([]);
+export default function ItemSearch({
+  items = [],
+  loading = false,
+  error = null,
+  selectedItem = null,
+  onSelect,
+  onRetry,
+}) {
   const [search, setSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [reloadToken, setReloadToken] = useState(0);
+  const [onlyLowStock, setOnlyLowStock] = useState(false);
 
-  useEffect(() => {
-    const q = query(collection(db, COLLECTIONS.ITEMS), orderBy('name'));
-    const unsub = onSnapshot(
-      q,
-      (snapshot) => {
-        const data = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-        setItems(data);
-        setLoading(false);
-      },
-      (err) => {
-        console.error('Error fetching inventory items:', err);
-        setError('Failed to load inventory. Please check your connection.');
-        setLoading(false);
-      }
-    );
-
-    return () => unsub();
-  }, [reloadToken]);
-
-  const handleRetry = () => {
-    setLoading(true);
-    setError(null);
-    setReloadToken((prev) => prev + 1);
-  };
-
+  // Category counts
   const counts = useMemo(() => {
+    let raw = 0;
+    let finished = 0;
+    let hardware = 0;
+    let fabric = 0;
+    let finishes = 0;
+    let lowOrOut = 0;
+
+    items.forEach((item) => {
+      const type = item.type;
+      const name = (item.name || '').toLowerCase();
+      const qty = Number(item.quantity) || 0;
+      const threshold = Number(item.threshold) || 0;
+
+      if (qty <= threshold) lowOrOut += 1;
+
+      if (type === ITEM_TYPES.RAW) {
+        raw += 1;
+        if (name.includes('screw') || name.includes('hinge') || name.includes('handle') || name.includes('hardware') || name.includes('pull')) {
+          hardware += 1;
+        }
+        if (name.includes('fabric') || name.includes('foam') || name.includes('bouclé') || name.includes('leather')) {
+          fabric += 1;
+        }
+        if (name.includes('oil') || name.includes('finish') || name.includes('varnish') || name.includes('paint') || name.includes('lacquer')) {
+          finishes += 1;
+        }
+      } else {
+        finished += 1;
+      }
+    });
+
     return {
       all: items.length,
-      raw: items.filter((i) => i.type === ITEM_TYPES.RAW).length,
-      finished: items.filter((i) => i.type === ITEM_TYPES.FINISHED).length,
+      raw,
+      finished,
+      hardware,
+      fabric,
+      finishes,
+      lowOrOut,
     };
   }, [items]);
 
-  const filtered = useMemo(() => {
-    return items.filter((item) => {
-      const matchesSearch = item.name?.toLowerCase().includes(search.trim().toLowerCase());
-      const matchesCategory =
-        selectedCategory === 'all' || item.type === selectedCategory;
-      return matchesSearch && matchesCategory;
-    });
-  }, [items, search, selectedCategory]);
+  // Filtered and Sorted Item List
+  const filteredItems = useMemo(() => {
+    const query = search.trim().toLowerCase();
 
-  const handleResetFilters = () => {
-    setSearch('');
-    setSelectedCategory('all');
+    return items
+      .filter((item) => {
+        // 1. Text Search
+        const matchesSearch =
+          !query ||
+          item.name?.toLowerCase().includes(query) ||
+          item.unit?.toLowerCase().includes(query) ||
+          item.type?.toLowerCase().includes(query) ||
+          item.sku?.toLowerCase().includes(query);
+
+        // 2. Category Filter
+        let matchesCategory = true;
+        const name = (item.name || '').toLowerCase();
+        if (selectedCategory === 'raw') {
+          matchesCategory = item.type === ITEM_TYPES.RAW;
+        } else if (selectedCategory === 'finished') {
+          matchesCategory = item.type === ITEM_TYPES.FINISHED;
+        } else if (selectedCategory === 'hardware') {
+          matchesCategory =
+            name.includes('screw') ||
+            name.includes('hinge') ||
+            name.includes('handle') ||
+            name.includes('hardware') ||
+            name.includes('pull') ||
+            name.includes('drawer');
+        } else if (selectedCategory === 'fabrics') {
+          matchesCategory =
+            name.includes('fabric') ||
+            name.includes('foam') ||
+            name.includes('bouclé') ||
+            name.includes('leather') ||
+            name.includes('upholstery');
+        } else if (selectedCategory === 'finishes') {
+          matchesCategory =
+            name.includes('oil') ||
+            name.includes('finish') ||
+            name.includes('varnish') ||
+            name.includes('paint') ||
+            name.includes('hardwax');
+        }
+
+        // 3. Low stock toggle
+        const qty = Number(item.quantity) || 0;
+        const threshold = Number(item.threshold) || 0;
+        const matchesLowStock = !onlyLowStock || qty <= threshold;
+
+        return matchesSearch && matchesCategory && matchesLowStock;
+      })
+      .sort((a, b) => {
+        // Critical stockouts and low stock items first for craftsman priority
+        const aQty = Number(a.quantity) || 0;
+        const bQty = Number(b.quantity) || 0;
+        const aThresh = Number(a.threshold) || 1;
+        const bThresh = Number(b.threshold) || 1;
+        const aRatio = aQty / aThresh;
+        const bRatio = bQty / bThresh;
+        return aRatio - bRatio;
+      });
+  }, [items, search, selectedCategory, onlyLowStock]);
+
+  const getTag = (item) => {
+    const name = (item.name || '').toUpperCase();
+    if (name.includes('TEAK')) return 'TEAK';
+    if (name.includes('WALNUT')) return 'WALNUT';
+    if (name.includes('OAK')) return 'OAK';
+    if (name.includes('PULAK') || name.includes('PLY')) return 'PLY';
+    if (name.includes('BLUM') || name.includes('HINGE') || name.includes('DRAWER')) return 'BLUM';
+    if (name.includes('FABRIC') || name.includes('BOUCL')) return 'FAB';
+    if (name.includes('FOAM')) return 'FOAM';
+    if (name.includes('BRASS') || name.includes('STEEL')) return 'BRASS';
+    return item.type === ITEM_TYPES.RAW ? 'RAW' : 'ITEM';
+  };
+
+  const getLocation = (index) => {
+    const locations = [
+      'Rack A-12 (Vault C)',
+      'Bin H-04',
+      'Roll Rack F-02',
+      'Bay 03 Mezzanine',
+      'Bin M-08',
+      'Vault C (Bays 01-04)',
+      'Station 04 Shelf B',
+      'Aisle 2 - Bay 4',
+    ];
+    return locations[index % locations.length];
   };
 
   return (
-    <div className="space-y-6 sm:space-y-8">
-      {/* Search and Category Filter Toolbar */}
-      <div className="glass rounded-2xl p-4 sm:p-5 border border-border/60">
-        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-          {/* Search input takes full width on mobile/tablet, flexible on desktop */}
-          <div className="w-full lg:max-w-md xl:max-w-lg">
-            <SearchBar
+    <div className="flex flex-col gap-5" id="workshop-inventory">
+      {/* Search, Barcode Trigger & Category Filters */}
+      <div className="bg-[#171f33] p-4 sm:p-5 rounded-xl shadow-md border border-[#334155] flex flex-col gap-4">
+        {/* Search Bar + Barcode Scanner Button */}
+        <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center">
+          <div className="relative flex-1">
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#94a3b8]" size={18} />
+            <input
+              type="text"
               value={search}
-              onChange={setSearch}
-              placeholder="Search materials, finished goods, parts..."
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search material by SKU, name, or timber grain (e.g. Teak, Blum, Bouclé)..."
+              className="w-full bg-[#060e20] text-[#f8fafc] placeholder:text-[#94a3b8] text-sm pl-10 pr-10 py-2.5 rounded-xl border border-[#334155] focus:outline-none focus:border-[#4f46e5] focus:ring-1 focus:ring-[#4f46e5] shadow-inner"
             />
-          </div>
-
-          {/* Filter tabs and item counter */}
-          <div className="flex flex-wrap items-center justify-between sm:justify-start lg:justify-end gap-2.5">
-            <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
-              <span className="text-xs font-semibold text-text-dim flex items-center gap-1.5 mr-1 hidden sm:inline-flex">
-                <Layers size={13} />
-                Filter:
-              </span>
-              {[
-                { id: 'all', label: 'All Items', count: counts.all },
-                { id: ITEM_TYPES.RAW, label: 'Raw Materials', count: counts.raw },
-                { id: ITEM_TYPES.FINISHED, label: 'Finished Goods', count: counts.finished },
-              ].map((cat) => {
-                const isActive = selectedCategory === cat.id;
-                return (
-                  <button
-                    key={cat.id}
-                    type="button"
-                    onClick={() => setSelectedCategory(cat.id)}
-                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium transition-all cursor-pointer ${
-                      isActive
-                        ? 'bg-accent/20 text-accent-light border border-accent/40 shadow-sm shadow-accent/10'
-                        : 'bg-primary/50 text-text-muted hover:text-text hover:bg-surface-light/50 border border-border/40'
-                    }`}
-                  >
-                    <span>{cat.label}</span>
-                    <span
-                      className={`text-[10px] px-1.5 py-0.2 rounded-full font-semibold ${
-                        isActive ? 'bg-accent/30 text-accent-light' : 'bg-surface-light text-text-dim'
-                      }`}
-                    >
-                      {cat.count}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-
-            {/* Item count badge */}
-            <div className="text-xs text-text-muted px-2.5 py-1.5 rounded-xl bg-primary/40 border border-border/40 shrink-0">
-              <span>
-                {loading ? 'Updating...' : `${filtered.length} of ${items.length} items`}
-              </span>
+            <div className="absolute right-3 top-1/2 -translate-y-1/2 text-[#94a3b8] flex items-center gap-1">
+              <Keyboard size={15} />
             </div>
           </div>
+
+          <button
+            type="button"
+            onClick={() => {
+              // Quick optical scan prompt simulation
+              const term = prompt('Enter or scan barcode / SKU (e.g. SKU-WD-TEAK-084):');
+              if (term) setSearch(term);
+            }}
+            className="px-4 py-2.5 bg-[#222a3d] hover:bg-[#2d3449] text-[#f8fafc] text-xs font-semibold rounded-xl flex items-center justify-center gap-2 border border-[#334155] transition-colors whitespace-nowrap shadow-sm cursor-pointer"
+          >
+            <Barcode size={17} className="text-[#818cf8]" />
+            <span>Optical Scan</span>
+          </button>
+        </div>
+
+        {/* Category Pills & Only Low Stock Toggle */}
+        <div className="flex items-center justify-between flex-wrap gap-3 pt-1 border-t border-[#334155]/60">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <button
+              type="button"
+              onClick={() => setSelectedCategory('all')}
+              className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-colors cursor-pointer ${
+                selectedCategory === 'all'
+                  ? 'bg-[#4f46e5] text-white shadow-sm'
+                  : 'bg-[#222a3d] text-[#cbd5e1] hover:text-white hover:bg-[#2d3449] border border-[#334155]/50'
+              }`}
+            >
+              All Materials ({counts.all})
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setSelectedCategory('raw')}
+              className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-colors cursor-pointer ${
+                selectedCategory === 'raw'
+                  ? 'bg-[#4f46e5] text-white shadow-sm'
+                  : 'bg-[#222a3d] text-[#cbd5e1] hover:text-white hover:bg-[#2d3449] border border-[#334155]/50'
+              }`}
+            >
+              Raw Timber (Lumber)
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setSelectedCategory('hardware')}
+              className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-colors cursor-pointer ${
+                selectedCategory === 'hardware'
+                  ? 'bg-[#4f46e5] text-white shadow-sm'
+                  : 'bg-[#222a3d] text-[#cbd5e1] hover:text-white hover:bg-[#2d3449] border border-[#334155]/50'
+              }`}
+            >
+              Hardware &amp; Mechanisms
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setSelectedCategory('fabrics')}
+              className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-colors cursor-pointer ${
+                selectedCategory === 'fabrics'
+                  ? 'bg-[#4f46e5] text-white shadow-sm'
+                  : 'bg-[#222a3d] text-[#cbd5e1] hover:text-white hover:bg-[#2d3449] border border-[#334155]/50'
+              }`}
+            >
+              Fabrics &amp; Foams
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setSelectedCategory('finishes')}
+              className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-colors cursor-pointer ${
+                selectedCategory === 'finishes'
+                  ? 'bg-[#4f46e5] text-white shadow-sm'
+                  : 'bg-[#222a3d] text-[#cbd5e1] hover:text-white hover:bg-[#2d3449] border border-[#334155]/50'
+              }`}
+            >
+              Finishes &amp; Oils
+            </button>
+          </div>
+
+          {/* Only Low Stock Switch */}
+          <label className="inline-flex items-center gap-2 cursor-pointer select-none bg-[#060e20] px-3 py-1.5 rounded-full border border-[#334155]/60 shadow-inner">
+            <input
+              type="checkbox"
+              checked={onlyLowStock}
+              onChange={(e) => setOnlyLowStock(e.target.checked)}
+              className="sr-only"
+            />
+            <div
+              className={`w-8 h-4 rounded-full transition-colors relative flex items-center ${
+                onlyLowStock ? 'bg-[#4f46e5]' : 'bg-[#2d3449]'
+              }`}
+            >
+              <div
+                className={`w-3 h-3 rounded-full bg-white transition-transform ${
+                  onlyLowStock ? 'translate-x-4' : 'translate-x-0.5'
+                }`}
+              />
+            </div>
+            <span className="text-[11px] font-bold text-[#cbd5e1] uppercase tracking-wider">
+              Only Low Stock (&lt; Threshold)
+            </span>
+          </label>
         </div>
       </div>
 
-      {/* Error State */}
-      {error && (
-        <div className="p-4 rounded-2xl bg-danger/10 border border-danger/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-fade-in">
-          <div className="flex items-center gap-2.5 text-sm text-danger-light">
-            <AlertTriangle size={18} className="flex-shrink-0" />
-            <span>{error}</span>
-          </div>
-          <button
-            type="button"
-            onClick={handleRetry}
-            className="btn-secondary py-1.5 px-3 text-xs flex items-center gap-1.5 self-start sm:self-auto cursor-pointer"
-          >
-            <RefreshCw size={13} />
-            Retry
-          </button>
-        </div>
-      )}
-
-      {/* Loading Skeletons */}
+      {/* Loading Skeleton */}
       {loading && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 lg:gap-6">
-          {[1, 2, 3, 4, 5, 6].map((idx) => (
+        <div className="space-y-3">
+          {[1, 2, 3].map((i) => (
             <div
-              key={idx}
-              className="glass rounded-2xl p-5 border border-border/40 space-y-4 animate-pulse flex flex-col justify-between h-[210px]"
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div className="w-10 h-10 rounded-xl bg-surface-light/50 shrink-0" />
-                <div className="flex-1 space-y-2">
-                  <div className="h-4 bg-surface-light/60 rounded-md w-3/4" />
-                  <div className="h-3 bg-surface-light/40 rounded-md w-1/3" />
-                </div>
-                <div className="w-14 h-5 bg-surface-light/40 rounded-full shrink-0" />
-              </div>
-              <div className="pt-3 border-t border-border/20 flex justify-between items-end">
-                <div className="space-y-1">
-                  <div className="h-3 bg-surface-light/30 rounded w-16" />
-                  <div className="h-6 bg-surface-light/50 rounded w-24" />
-                </div>
-                <div className="h-5 bg-surface-light/40 rounded-full w-16" />
-              </div>
-              <div className="h-10 bg-surface-light/40 rounded-xl w-full" />
-            </div>
+              key={i}
+              className="h-28 rounded-xl bg-[#171f33] border border-[#334155] animate-pulse"
+            />
           ))}
         </div>
       )}
 
-      {/* Empty State: Database has no items */}
-      {!loading && !error && items.length === 0 && (
-        <div className="glass rounded-2xl p-8 border border-border/50">
-          <EmptyState
-            title="No inventory items found"
-            message="Your company inventory has no recorded stock yet. Ask an owner or manager to add items."
-          />
+      {/* Error state */}
+      {error && !loading && (
+        <div className="p-6 rounded-xl bg-[#93000a]/20 border border-[#ef4444]/40 text-center space-y-3">
+          <AlertTriangle className="text-[#ef4444] mx-auto" size={28} />
+          <p className="text-sm text-[#ffb4ab]">{error}</p>
+          {onRetry && (
+            <button
+              onClick={onRetry}
+              className="px-4 py-2 bg-[#ef4444] hover:bg-[#dc2626] text-white text-xs font-semibold rounded-xl"
+            >
+              Retry Sync
+            </button>
+          )}
         </div>
       )}
 
-      {/* Empty State: Search or category filter yielded 0 items */}
-      {!loading && !error && items.length > 0 && filtered.length === 0 && (
-        <div className="glass rounded-2xl p-8 border border-border/50 text-center flex flex-col items-center justify-center space-y-3">
-          <div className="w-12 h-12 rounded-2xl bg-surface-light/50 flex items-center justify-center text-text-dim">
-            <SearchX size={24} />
-          </div>
-          <div>
-            <h3 className="text-base font-semibold text-text">No matching items</h3>
-            <p className="text-xs text-text-dim mt-1 max-w-sm">
-              No inventory items match "{search}" in {selectedCategory === 'all' ? 'any category' : selectedCategory}.
-            </p>
-          </div>
+      {/* Empty State */}
+      {!loading && !error && filteredItems.length === 0 && (
+        <div className="py-12 text-center p-8 rounded-xl bg-[#131b2e] border border-[#334155]">
+          <Package className="text-[#94a3b8] mx-auto mb-3 opacity-60" size={36} />
+          <h3 className="text-base font-bold text-[#f8fafc]">No matching materials found</h3>
+          <p className="text-xs text-[#94a3b8] mt-1 max-w-sm mx-auto">
+            Try adjusting your search query, clear filters, or check the workshop inventory catalog.
+          </p>
           <button
             type="button"
-            onClick={handleResetFilters}
-            className="btn-secondary text-xs py-2 px-3.5 mt-2"
+            onClick={() => {
+              setSearch('');
+              setSelectedCategory('all');
+              setOnlyLowStock(false);
+            }}
+            className="mt-4 px-4 py-2 bg-[#222a3d] hover:bg-[#2d3449] text-xs font-semibold text-white rounded-xl border border-[#334155]"
           >
-            Reset search and filters
+            Reset Filters
           </button>
         </div>
       )}
 
-      {/* Inventory Item Cards */}
-      {!loading && !error && filtered.length > 0 && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 lg:gap-6">
-          {filtered.map((item) => {
-            const isOutOfStock = Number(item.quantity) <= 0;
-            const isLowStock =
-              !isOutOfStock &&
-              item.threshold != null &&
-              Number(item.quantity) <= Number(item.threshold);
+      {/* Material Stock Listing (Horizontal Interactive Cards) */}
+      {!loading && !error && (
+        <div className="flex flex-col gap-3">
+          {filteredItems.map((item, idx) => {
+            const qty = Number(item.quantity) || 0;
+            const threshold = Number(item.threshold) || 0;
+            const isSelected = selectedItem?.id === item.id;
+            const isDepleted = qty <= 0;
+            const isLow = !isDepleted && qty <= threshold;
+            const isBufferSafe = !isDepleted && !isLow && threshold > 0 && qty < threshold * 2;
+            const isHealthy = !isDepleted && !isLow && !isBufferSafe;
+
+            // Ratio calculation capped at 100%
+            const maxRef = threshold > 0 ? Math.max(threshold * 1.5, qty) : Math.max(100, qty);
+            const percentage = Math.min(100, Math.round((qty / maxRef) * 100));
+
+            const sku = item.sku || `SKU-${item.type === ITEM_TYPES.RAW ? 'WD' : 'FN'}-${item.name?.slice(0, 4).toUpperCase()}-${idx + 101}`;
+            const location = item.location || getLocation(idx);
+            const tag = getTag(item);
 
             return (
               <div
                 key={item.id}
-                className={`glass rounded-2xl p-5 sm:p-6 border flex flex-col justify-between transition-all duration-200 group h-full ${
-                  isOutOfStock
-                    ? 'border-border/40 opacity-75'
-                    : isLowStock
-                    ? 'border-warning/30 hover:border-warning/60 hover:bg-card-hover'
-                    : 'border-border/60 hover:border-accent/40 hover:bg-card-hover'
+                onClick={() => onSelect(item)}
+                className={`p-4 sm:p-5 rounded-xl border transition-all relative overflow-hidden flex flex-col md:flex-row md:items-center justify-between gap-4 cursor-pointer group ${
+                  isSelected
+                    ? 'bg-[#1e293b] border-[#4f46e5] shadow-lg ring-1 ring-[#4f46e5]/50'
+                    : 'bg-[#171f33] hover:bg-[#1e293b] border-[#334155] shadow-sm'
                 }`}
               >
-                <div className="space-y-3.5">
-                  {/* Top: Icon + Name on Left, Category Badge on Right */}
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex items-start gap-3 min-w-0 flex-1">
-                      <div
-                        className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-transform group-hover:scale-105 ${
-                          isOutOfStock
-                            ? 'bg-surface-light text-text-dim'
-                            : isLowStock
-                            ? 'bg-warning/10 text-warning-light border border-warning/20'
-                            : item.type === ITEM_TYPES.FINISHED
-                            ? 'bg-success/10 text-success-light border border-success/20'
-                            : 'bg-accent/10 text-accent-light border border-accent/20'
-                        }`}
-                      >
-                        <Package size={20} />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <h2 className="text-sm font-semibold text-text leading-snug line-clamp-2" title={item.name}>
-                          {item.name}
-                        </h2>
-                      </div>
-                    </div>
+                {/* Selected left accent indicator */}
+                {isSelected && (
+                  <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-[#4f46e5]" />
+                )}
 
-                    <span
-                      className={`badge shrink-0 text-[10px] font-semibold ${
-                        item.type === ITEM_TYPES.RAW ? 'badge-raw' : 'badge-finished'
-                      }`}
-                    >
-                      {item.type || 'Standard'}
+                {/* Left: Thumbnail & Details */}
+                <div className="flex items-start gap-4 min-w-0 flex-1 pl-1">
+                  {/* Thumbnail / Tag box */}
+                  <div className="w-14 h-14 rounded-xl overflow-hidden bg-[#060e20] border border-[#334155]/60 flex-shrink-0 relative shadow-sm flex items-center justify-center">
+                    <Package size={24} className="text-[#818cf8]" />
+                    <span className="absolute bottom-0 right-0 bg-[#060e20]/90 px-1 font-mono text-[9px] font-bold text-[#f8fafc] border-tl rounded-tl">
+                      {tag}
                     </span>
                   </div>
 
-                  {/* Stock Metrics */}
-                  <div className="pt-3 border-t border-border/30 flex items-end justify-between gap-2">
-                    <div>
-                      <p className="text-[10px] font-semibold text-text-dim uppercase tracking-wider">
-                        Available Stock
-                      </p>
-                      <p
-                        className={`text-2xl font-bold tracking-tight mt-0.5 ${
-                          isOutOfStock
-                            ? 'text-danger-light'
-                            : isLowStock
-                            ? 'text-warning-light'
-                            : 'text-text'
-                        }`}
-                      >
-                        {formatNumber(item.quantity)}{' '}
-                        <span className="text-xs font-normal text-text-dim">
-                          {item.unit || 'units'}
-                        </span>
-                      </p>
-                    </div>
+                  {/* Material Info */}
+                  <div className="flex flex-col min-w-0 flex-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h3 className="font-['Plus_Jakarta_Sans',sans-serif] text-base font-bold text-[#f8fafc] truncate">
+                        {item.name}
+                      </h3>
 
-                    {/* Stock Status Badge */}
-                    <div className="text-right shrink-0">
-                      {isOutOfStock ? (
-                        <span className="badge badge-low text-[10px]">
-                          Out of stock
-                        </span>
-                      ) : isLowStock ? (
-                        <span className="badge badge-low text-[10px] flex items-center gap-1">
-                          <AlertTriangle size={10} />
-                          Low ({formatNumber(item.threshold)} min)
-                        </span>
-                      ) : (
-                        <span className="badge badge-finished text-[10px] flex items-center gap-1">
-                          <CheckCircle2 size={10} />
-                          In Stock
+                      {/* Status Badges */}
+                      {isDepleted && (
+                        <span className="px-2 py-0.5 rounded-md bg-[#ef4444]/15 text-[#ef4444] border border-[#ef4444]/30 text-[11px] font-bold uppercase tracking-wider inline-flex items-center gap-1.5">
+                          <span className="w-1.5 h-1.5 rounded-full bg-[#ef4444] animate-ping" />
+                          Critical Runout
                         </span>
                       )}
+                      {isLow && (
+                        <span className="px-2 py-0.5 rounded-md bg-amber-500/15 text-amber-300 border border-amber-500/30 text-[11px] font-bold uppercase tracking-wider inline-flex items-center gap-1.5">
+                          <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+                          Low Stock ({percentage}%)
+                        </span>
+                      )}
+                      {isBufferSafe && (
+                        <span className="px-2 py-0.5 rounded-md bg-[#38bdf8]/15 text-[#7bd0ff] border border-[#38bdf8]/30 text-[11px] font-bold uppercase tracking-wider inline-flex items-center gap-1.5">
+                          <span className="w-1.5 h-1.5 rounded-full bg-[#38bdf8]" />
+                          Buffer Safe ({percentage}%)
+                        </span>
+                      )}
+                      {isHealthy && (
+                        <span className="px-2 py-0.5 rounded-md bg-[#10b981]/15 text-[#4edea3] border border-[#10b981]/30 text-[11px] font-bold uppercase tracking-wider inline-flex items-center gap-1.5">
+                          <span className="w-1.5 h-1.5 rounded-full bg-[#10b981]" />
+                          Adequate / Healthy
+                        </span>
+                      )}
+
+                      {isSelected && (
+                        <span className="px-2 py-0.5 rounded-md bg-[#4f46e5]/20 text-[#c3c0ff] border border-[#4f46e5]/40 text-[10px] font-bold uppercase tracking-wider">
+                          SELECTED
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Metadata Subtitle */}
+                    <div className="flex items-center gap-x-3 gap-y-1 mt-1 flex-wrap text-[#94a3b8] text-xs">
+                      <span className="font-mono text-[#cbd5e1] font-semibold">{sku}</span>
+                      <span>•</span>
+                      <span>{item.type === ITEM_TYPES.RAW ? 'Raw Timber (Lumber)' : 'Finished Good'}</span>
+                      <span>•</span>
+                      <span className="inline-flex items-center gap-1 text-[#f8fafc]">
+                        <MapPin size={13} className="text-[#818cf8]" />
+                        {location}
+                      </span>
+                    </div>
+
+                    {/* Stock Visual Threshold Meter */}
+                    <div className="mt-2.5 flex items-center gap-3 max-w-md">
+                      <div className="flex-1 bg-[#060e20] h-2 rounded-full overflow-hidden shadow-inner flex border border-[#1e293b]">
+                        <div
+                          className={`h-full rounded-full transition-all duration-500 ${
+                            isDepleted
+                              ? 'bg-[#ef4444]'
+                              : isLow
+                              ? 'bg-amber-400'
+                              : isBufferSafe
+                              ? 'bg-[#38bdf8]'
+                              : 'bg-[#10b981]'
+                          }`}
+                          style={{ width: `${Math.max(4, percentage)}%` }}
+                        />
+                      </div>
+                      <span className="text-[11px] font-mono text-[#94a3b8] whitespace-nowrap">
+                        <strong className="text-[#f8fafc] font-bold font-mono">
+                          {formatNumber(qty)}
+                        </strong>{' '}
+                        / {threshold > 0 ? `${formatNumber(threshold)} ` : ''}{item.unit || 'units'}
+                      </span>
                     </div>
                   </div>
                 </div>
 
-                {/* Bottom Action Button */}
-                <div className="pt-4 mt-3 border-t border-border/30">
+                {/* Right: Quantity Metrics & Action Button */}
+                <div className="flex flex-col gap-2.5 w-full md:w-auto md:items-end border-t md:border-t-0 pt-3 md:pt-0 border-[#334155]/50 shrink-0">
+                  <div className="flex items-baseline justify-between md:justify-end gap-3 w-full">
+                    <span className="text-xl sm:text-2xl font-bold font-mono text-[#f8fafc] tabular-nums">
+                      {formatNumber(qty)}{' '}
+                      <span className="text-xs font-normal text-[#94a3b8]">
+                        {item.unit || 'units'}
+                      </span>
+                    </span>
+                    <span className="text-[11px] text-[#94a3b8] font-mono">
+                      {threshold > 0 ? `Min: ${formatNumber(threshold)} ${item.unit || 'units'}` : 'Buffer Monitored'}
+                    </span>
+                  </div>
+
                   <button
                     type="button"
-                    onClick={() => onSelect(item)}
-                    disabled={isOutOfStock}
-                    className={`w-full py-2.5 px-4 rounded-xl text-xs font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer ${
-                      isOutOfStock
-                        ? 'bg-surface-light/40 text-text-dim border border-border/40 cursor-not-allowed opacity-60'
-                        : 'btn-primary'
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onSelect(item);
+                    }}
+                    className={`w-full md:w-auto px-4 py-2 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 shadow-sm transition-all cursor-pointer ${
+                      isSelected
+                        ? 'bg-[#4f46e5] text-white hover:brightness-110'
+                        : 'bg-[#222a3d] hover:bg-[#4f46e5] hover:text-white text-[#cbd5e1] border border-[#334155]'
                     }`}
                   >
-                    <MinusCircle size={15} />
-                    <span>{isOutOfStock ? 'No Stock to Pick' : 'Deduct Stock'}</span>
+                    {isSelected ? (
+                      <>
+                        <Check size={14} />
+                        <span>Active in Console</span>
+                      </>
+                    ) : (
+                      <>
+                        <PlusCircle size={14} />
+                        <span>Select for Deduction</span>
+                      </>
+                    )}
                   </button>
                 </div>
               </div>
