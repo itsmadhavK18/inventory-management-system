@@ -25,21 +25,24 @@ export default function Navbar() {
 
   return (
     <nav className="glass sticky top-0 z-40 border-b border-border/50">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div className="max-w-[1680px] mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-14">
           {/* Logo */}
           <button
             onClick={() => navigate(userData?.role === 'owner' ? '/owner/dashboard' : '/employee')}
-            className="flex items-center gap-2 cursor-pointer"
+            className="flex items-center gap-2.5 cursor-pointer text-left"
           >
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-accent to-accent-dark flex items-center justify-center">
-              <Package size={16} className="text-white" />
+            <div className="w-8 h-8 rounded-lg bg-accent border border-accent-light/30 flex items-center justify-center shadow-sm">
+              <Package size={17} className="text-white" />
             </div>
-            <span className="text-base font-bold text-text hidden sm:block">FurnTrack</span>
+            <div className="hidden sm:flex flex-col">
+              <span className="font-headline text-base font-bold text-text tracking-tight leading-none">FurnTrack</span>
+              <span className="text-[9px] uppercase tracking-widest text-text-dim font-semibold mt-0.5">Studio & Atelier OS</span>
+            </div>
           </button>
 
           {/* Desktop links */}
-          <div className="hidden md:flex items-center gap-1">
+          <div className="hidden md:flex items-center gap-1.5 bg-surface-dark/60 p-1 rounded-xl border border-border/40">
             {links.map((link) => {
               const Icon = link.icon;
               const isActive = location.pathname === link.path;
@@ -47,13 +50,13 @@ export default function Navbar() {
                 <button
                   key={link.path}
                   onClick={() => navigate(link.path)}
-                  className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all cursor-pointer ${
+                  className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer ${
                     isActive
-                      ? 'bg-accent/15 text-accent-light'
-                      : 'text-text-muted hover:text-text hover:bg-surface-light/50'
+                      ? 'bg-accent text-white shadow-sm'
+                      : 'text-text-muted hover:text-text hover:bg-surface-light/60'
                   }`}
                 >
-                  <Icon size={16} />
+                  <Icon size={15} />
                   {link.label}
                 </button>
               );
@@ -62,6 +65,15 @@ export default function Navbar() {
 
           {/* Right side */}
           <div className="flex items-center gap-3">
+            {/* Live indicator on desktop */}
+            <div className="hidden lg:flex items-center gap-2 px-2.5 py-1 rounded-full bg-surface-dark/80 border border-border/50 text-[11px] text-text-dim">
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-400" />
+              </span>
+              <span className="font-medium text-emerald-400">Live Sync</span>
+            </div>
+
             <div className="flex items-center gap-2">
               <div className="w-8 h-8 rounded-full bg-accent/20 border border-accent/30 flex items-center justify-center">
                 <span className="text-xs font-bold text-accent-light">
@@ -70,7 +82,9 @@ export default function Navbar() {
               </div>
               <div className="hidden sm:flex flex-col text-left">
                 <span className="text-xs font-semibold text-text leading-tight">{userData?.name || 'User'}</span>
-                <span className="text-[10px] text-accent-light font-medium capitalize">{userData?.role || 'Staff'}</span>
+                <span className="text-[10px] text-text-dim font-medium">
+                  {userData?.role === 'owner' ? 'Atelier Principal' : 'Craftsman'}
+                </span>
               </div>
             </div>
 
