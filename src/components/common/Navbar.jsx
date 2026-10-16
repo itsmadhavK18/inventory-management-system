@@ -1,6 +1,15 @@
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/useAuth';
-import { LayoutDashboard, Package, Users, FileText, LogOut, Menu, X } from 'lucide-react';
+import {
+  LayoutDashboard,
+  Package,
+  Users,
+  FileText,
+  LogOut,
+  Menu,
+  X,
+  Hammer,
+} from 'lucide-react';
 import { useState } from 'react';
 
 const ownerLinks = [
@@ -10,113 +19,166 @@ const ownerLinks = [
   { path: '/owner/quotations', label: 'Quotations', icon: FileText },
 ];
 
+const employeeNavTabs = [
+  { id: 'deduction', label: 'Material Deduction', anchor: '#deduction-console' },
+  { id: 'inventory', label: 'Workshop Inventory', anchor: '#workshop-inventory' },
+  { id: 'history', label: 'Deduction History', anchor: '#shift-ledger' },
+  { id: 'shift', label: 'My Shift Logs', anchor: '#shift-ledger' },
+];
+
 export default function Navbar() {
   const { userData, logout } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [activeEmployeeTab, setActiveEmployeeTab] = useState('deduction');
 
   const handleLogout = async () => {
     await logout();
     navigate('/');
   };
 
-  const links = userData?.role === 'owner' ? ownerLinks : [];
+  const isOwner = userData?.role === 'owner';
+  const isEmployee = userData?.role === 'employee';
+
+  const handleTabClick = (tab) => {
+    setActiveEmployeeTab(tab.id);
+    setMobileMenuOpen(false);
+    if (tab.anchor) {
+      const el = document.querySelector(tab.anchor);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }
+  };
 
   return (
-    <nav className="glass sticky top-0 z-40 border-b border-border/50">
-      <div className="max-w-[1680px] mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-14">
-          {/* Logo */}
+    <header className="sticky top-0 w-full z-50 bg-[#060e20]/95 backdrop-blur-xl border-b border-[#1e293b] shadow-[0_1px_8px_rgba(0,0,0,0.45)]">
+      <div className="h-16 w-full max-w-[1680px] mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between gap-4 lg:gap-6">
+        {/* Left: Brand + Navigation */}
+        <div className="flex items-center gap-6 lg:gap-8">
+          {/* Logo / Atelier Identifier */}
           <button
-            onClick={() => navigate(userData?.role === 'owner' ? '/owner/dashboard' : '/employee')}
-            className="flex items-center gap-2.5 cursor-pointer text-left"
+            onClick={() => navigate(isOwner ? '/owner/dashboard' : '/employee')}
+            className="flex items-center gap-3 cursor-pointer text-left focus:outline-none"
           >
-            <div className="w-8 h-8 rounded-lg bg-accent border border-accent-light/30 flex items-center justify-center shadow-sm">
-              <Package size={17} className="text-white" />
+            <div className="flex items-center justify-center w-8 h-8 rounded-xl bg-[#222a3d] text-[#c3c0ff] border border-[#334155]/60 shadow-sm shrink-0">
+              <Hammer size={18} className="text-[#818cf8]" />
             </div>
-            <div className="hidden sm:flex flex-col">
-              <span className="font-headline text-base font-bold text-text tracking-tight leading-none">FurnTrack</span>
-              <span className="text-[9px] uppercase tracking-widest text-text-dim font-semibold mt-0.5">Studio & Atelier OS</span>
+            <div className="flex flex-col">
+              <span className="font-['Plus_Jakarta_Sans',sans-serif] text-base lg:text-lg font-bold tracking-tight text-[#f8fafc] leading-none">
+                FurnTrack
+              </span>
+              <span className="text-[10px] font-bold text-[#94a3b8] uppercase tracking-widest mt-0.5">
+                STUDIO &amp; ATELIER OS
+              </span>
             </div>
           </button>
 
-          {/* Desktop links */}
-          <div className="hidden md:flex items-center gap-1.5 bg-surface-dark/60 p-1 rounded-xl border border-border/40">
-            {links.map((link) => {
-              const Icon = link.icon;
-              const isActive = location.pathname === link.path;
-              return (
-                <button
-                  key={link.path}
-                  onClick={() => navigate(link.path)}
-                  className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer ${
-                    isActive
-                      ? 'bg-accent text-white shadow-sm'
-                      : 'text-text-muted hover:text-text hover:bg-surface-light/60'
-                  }`}
-                >
-                  <Icon size={15} />
-                  {link.label}
-                </button>
-              );
-            })}
+          {/* Desktop Navigation Links for Owner */}
+          {isOwner && (
+            <nav className="hidden md:flex items-center gap-1.5 bg-[#0b111e]/80 p-1 rounded-xl border border-[#334155]/50">
+              {ownerLinks.map((link) => {
+                const Icon = link.icon;
+                const isActive = location.pathname === link.path;
+                return (
+                  <button
+                    key={link.path}
+                    onClick={() => navigate(link.path)}
+                    className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                      isActive
+                        ? 'bg-[#4f46e5] text-white shadow-sm'
+                        : 'text-[#94a3b8] hover:text-[#f8fafc] hover:bg-[#1e293b]'
+                    }`}
+                  >
+                    <Icon size={14} />
+                    {link.label}
+                  </button>
+                );
+              })}
+            </nav>
+          )}
+
+          {/* Desktop Navigation Tabs for Employee Workspace */}
+          {isEmployee && (
+            <nav className="hidden xl:flex items-center gap-1">
+              {employeeNavTabs.map((tab) => {
+                const isActive = activeEmployeeTab === tab.id;
+                return (
+                  <button
+                    key={tab.id}
+                    onClick={() => handleTabClick(tab)}
+                    className={`px-3.5 py-1.5 text-xs rounded-xl font-semibold transition-colors cursor-pointer ${
+                      isActive
+                        ? 'bg-[#4f46e5] text-white shadow-sm'
+                        : 'text-[#94a3b8] hover:text-[#f8fafc] hover:bg-[#222a3d]'
+                    }`}
+                  >
+                    {tab.label}
+                  </button>
+                );
+              })}
+            </nav>
+          )}
+        </div>
+
+        {/* Right: Live Sync Badge + User Card + Sign Out */}
+        <div className="flex items-center gap-3 sm:gap-4 shrink-0">
+          {/* Live Sync Pill */}
+          <div className="hidden sm:flex items-center gap-2 bg-[#131b2e] border border-[#334155]/60 px-3 py-1.5 rounded-full shadow-[0_1px_2px_rgba(0,0,0,0.3)]">
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#10b981] opacity-75" />
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-[#10b981]" />
+            </span>
+            <span className="text-[10px] text-[#10b981] tracking-wider uppercase font-bold">
+              FIRESTORE CONNECTED • SYNCING LIVE
+            </span>
           </div>
 
-          {/* Right side */}
-          <div className="flex items-center gap-3">
-            {/* Live indicator on desktop */}
-            <div className="hidden lg:flex items-center gap-2 px-2.5 py-1 rounded-full bg-surface-dark/80 border border-border/50 text-[11px] text-text-dim">
-              <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-400" />
+          {/* User Profile Info */}
+          <div className="flex items-center gap-2.5 pl-1 sm:pl-2">
+            <div className="w-8 h-8 rounded-full bg-[#4f46e5]/20 border border-[#4f46e5]/40 flex items-center justify-center font-bold text-xs text-[#c3c0ff] shrink-0">
+              {userData?.name?.charAt(0)?.toUpperCase() || 'C'}
+            </div>
+            <div className="hidden md:flex flex-col text-left">
+              <span className="text-xs text-[#f8fafc] font-semibold leading-tight">
+                {userData?.name || 'Craftsman'}
               </span>
-              <span className="font-medium text-emerald-400">Live Sync</span>
+              <span className="text-[11px] text-[#94a3b8] leading-tight">
+                {isOwner ? 'Atelier Principal' : 'Senior Joinery Craftsman · Station 04'}
+              </span>
             </div>
-
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-full bg-accent/20 border border-accent/30 flex items-center justify-center">
-                <span className="text-xs font-bold text-accent-light">
-                  {userData?.name?.charAt(0)?.toUpperCase() || '?'}
-                </span>
-              </div>
-              <div className="hidden sm:flex flex-col text-left">
-                <span className="text-xs font-semibold text-text leading-tight">{userData?.name || 'User'}</span>
-                <span className="text-[10px] text-text-dim font-medium">
-                  {userData?.role === 'owner' ? 'Atelier Principal' : 'Craftsman'}
-                </span>
-              </div>
-            </div>
-
-            <button
-              onClick={handleLogout}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-text-dim hover:text-danger hover:bg-danger/10 transition-all cursor-pointer text-xs font-medium"
-              title="Sign out"
-              aria-label="Sign out"
-            >
-              <LogOut size={16} />
-              <span className="hidden md:inline">Sign out</span>
-            </button>
-
-            {/* Mobile menu toggle only if there are navigation links */}
-            {links.length > 0 && (
-              <button
-                onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-                className="md:hidden p-2 rounded-lg text-text-muted hover:bg-surface-light/50 transition-all cursor-pointer"
-                aria-label="Toggle navigation menu"
-              >
-                {mobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
-              </button>
-            )}
           </div>
+
+          {/* Sign Out Button */}
+          <button
+            onClick={handleLogout}
+            className="text-[11px] font-semibold text-[#94a3b8] hover:text-[#ef4444] hover:bg-[#ef4444]/10 px-2.5 py-1.5 rounded-lg transition-colors cursor-pointer flex items-center gap-1.5"
+            title="Sign Out"
+            aria-label="Sign Out"
+          >
+            <LogOut size={14} />
+            <span className="hidden sm:inline">Sign Out</span>
+          </button>
+
+          {/* Mobile Menu Button */}
+          {(isOwner || isEmployee) && (
+            <button
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              className="xl:hidden p-1.5 rounded-lg text-[#94a3b8] hover:text-white hover:bg-[#1e293b] transition-all cursor-pointer"
+              aria-label="Toggle navigation menu"
+            >
+              {mobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
+            </button>
+          )}
         </div>
       </div>
 
-      {/* Mobile dropdown */}
+      {/* Mobile Menu Dropdown */}
       {mobileMenuOpen && (
-        <div className="md:hidden border-t border-border/50 animate-slide-down">
-          <div className="px-4 py-2 space-y-1">
-            {links.map((link) => {
+        <div className="xl:hidden border-t border-[#1e293b] bg-[#060e20] px-4 py-3 space-y-1 shadow-2xl animate-fadeIn">
+          {isOwner &&
+            ownerLinks.map((link) => {
               const Icon = link.icon;
               const isActive = location.pathname === link.path;
               return (
@@ -126,20 +188,39 @@ export default function Navbar() {
                     navigate(link.path);
                     setMobileMenuOpen(false);
                   }}
-                  className={`flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm font-medium transition-all cursor-pointer ${
+                  className={`flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
                     isActive
-                      ? 'bg-accent/15 text-accent-light'
-                      : 'text-text-muted hover:text-text hover:bg-surface-light/50'
+                      ? 'bg-[#4f46e5] text-white shadow-sm'
+                      : 'text-[#94a3b8] hover:text-white hover:bg-[#1e293b]'
                   }`}
                 >
-                  <Icon size={18} />
+                  <Icon size={16} />
                   {link.label}
                 </button>
               );
             })}
-          </div>
+
+          {isEmployee &&
+            employeeNavTabs.map((tab) => {
+              const isActive = activeEmployeeTab === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => handleTabClick(tab)}
+                  className={`flex items-center justify-between w-full px-3 py-2.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                    isActive
+                      ? 'bg-[#4f46e5] text-white shadow-sm'
+                      : 'text-[#94a3b8] hover:text-white hover:bg-[#1e293b]'
+                  }`}
+                >
+                  <span>{tab.label}</span>
+                  {isActive && <span className="text-[10px] uppercase font-bold text-[#c3c0ff]">Active</span>}
+                </button>
+              );
+            })}
         </div>
       )}
-    </nav>
+    </header>
   );
 }
+
