@@ -1,0 +1,190 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // =========================================================================
+    // HELPER FUNCTIONS
+    // =========================================================================
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isUser(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function userExists(userId) {
+      return exists(/databases/$(database)/documents/users/$(userId));
+    }
+
+    function getUserData(userId) {
+      return get(/databases/$(database)/documents/users/$(userId)).data;
+    }
+
+    function isOwner() {
+      return isAuthenticated() &&
+        userExists(request.auth.uid) &&
+        getUserData(request.auth.uid).role == 'owner';
+    }
+
+    function isEmployee() {
+      return isAuthenticated() &&
+        userExists(request.auth.uid) &&
+        getUserData(request.auth.uid).role == 'employee';
+    }
+
+    function isValidUnit(u) {
+      return u in [
+        'pcs', 'kg', 'liters', 'meters', 'feet',
+        'sq ft', 'sheets', 'rolls', 'sets', 'boxes'
+      ];
+    }
+
+    // =========================================================================
+    // 1. USERS COLLECTION (/users/{userId})
+    // =========================================================================
+    match /users/{userId} {
+      // User can read their own profile; Owner can read all profiles (for EmployeeList query)
+      allow read: if isAuthenticated() && (isUser(userId) || isOwner());
+
+      // Only Owner can provision new user profiles (strictly as employee)
+      // Initial owner account must be provisioned via Firebase Console or Admin SDK
+      allow create: if isOwner() &&
+        request.resource.data.keys().hasOnly(['name', 'email', 'role', 'created_at']) &&
+        request.resource.data.role == 'employee' &&
+        request.resource.data.email is string &&
+        request.resource.data.email.size() > 0 &&
+        request.resource.data.name is string &&
+        request.resource.data.name.size() > 0 &&
+        request.resource.data.created_at == request.time;
+
+      // Owner can update profiles, but roles and emails are IMMUTABLE to prevent escalation
+      allow update: if isOwner() &&
+        request.resource.data.keys().hasOnly(['name', 'email', 'role', 'created_at']) &&
+        request.resource.data.role == resource.data.role &&
+        request.resource.data.email == resource.data.email &&
+        request.resource.data.name is string &&
+        request.resource.data.name.size() > 0 &&
+        request.resource.data.created_at == resource.data.created_at;
+
+      // Only Owner can delete user records
+      allow delete: if isOwner();
+    }
+
+    // =========================================================================
+    // 2. ITEMS COLLECTION (/items/{itemId})
+    // =========================================================================
+    match /items/{itemId} {
+      // All authenticated workshop members can view inventory
+      // NOTE: cost_per_unit is included in the document payload.
+      allow read: if isAuthenticated();
+
+      // Only Owner can add catalog items with strict field-level validation
+      allow create: if isOwner() &&
+        request.resource.data.keys().hasOnly(['name', 'type', 'quantity', 'unit', 'cost_per_unit', 'threshold', 'created_at']) &&
+        request.resource.data.name is string &&
+        request.resource.data.name.size() > 0 &&
+        request.resource.data.type in ['raw', 'finished'] &&
+        request.resource.data.quantity is number &&
+        request.resource.data.quantity >= 0 &&
+        isValidUnit(request.resource.data.unit) &&
+        request.resource.data.cost_per_unit is number &&
+        request.resource.data.cost_per_unit >= 0 &&
+        request.resource.data.threshold is number &&
+        request.resource.data.threshold >= 0 &&
+        request.resource.data.created_at == request.time;
+
+      allow delete: if isOwner();
+
+      // Updates:
+      // Case A: Owner has full editing permissions but with strict type and range validations
+      // Case B: Employee can ONLY decrement stock quantity and set updated_at timestamp.
+      //         Employees CANNOT alter cost_per_unit, threshold, name, type, or unit.
+      allow update: if (
+        isOwner() &&
+        request.resource.data.keys().hasOnly(['name', 'type', 'quantity', 'unit', 'cost_per_unit', 'threshold', 'created_at', 'updated_at']) &&
+        request.resource.data.name is string &&
+        request.resource.data.name.size() > 0 &&
+        request.resource.data.type in ['raw', 'finished'] &&
+        request.resource.data.quantity is number &&
+        request.resource.data.quantity >= 0 &&
+        isValidUnit(request.resource.data.unit) &&
+        request.resource.data.cost_per_unit is number &&
+        request.resource.data.cost_per_unit >= 0 &&
+        request.resource.data.threshold is number &&
+        request.resource.data.threshold >= 0 &&
+        request.resource.data.created_at == resource.data.created_at
+      ) || (
+        isEmployee() &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['quantity', 'updated_at']) &&
+        request.resource.data.quantity is number &&
+        request.resource.data.quantity >= 0 &&
+        request.resource.data.quantity < resource.data.quantity &&
+        request.resource.data.updated_at == request.time
+      );
+    }
+
+    // =========================================================================
+    // 3. USAGE LOGS (/usage_logs/{logId}) - IMMUTABLE AUDIT TRAIL
+    // =========================================================================
+    match /usage_logs/{logId} {
+      // All authenticated workshop members can read the live activity ledger
+      allow read: if isAuthenticated();
+
+      // Craftsman records material deduction:
+      // - user_id matches authenticated caller
+      // - user_name matches caller's profile name in /users (spoofing prevention)
+      // - item_id exists in /items and item_name matches existing item name
+      // - quantity_used > 0 and arithmetic is consistent
+      // - old_quantity matches pre-transaction item stock
+      // - getAfter() verifies that the corresponding item is updated to new_quantity in this transaction
+      allow create: if isAuthenticated() &&
+        request.resource.data.keys().hasOnly([
+          'item_id', 'item_name', 'quantity_used', 'old_quantity',
+          'new_quantity', 'work_order', 'reason', 'notes',
+          'user_id', 'user_name', 'unit', 'timestamp'
+        ]) &&
+        request.resource.data.user_id == request.auth.uid &&
+        userExists(request.auth.uid) &&
+        request.resource.data.user_name == getUserData(request.auth.uid).name &&
+        request.resource.data.item_id is string &&
+        exists(/databases/$(database)/documents/items/$(request.resource.data.item_id)) &&
+        request.resource.data.item_name == get(/databases/$(database)/documents/items/$(request.resource.data.item_id)).data.name &&
+        request.resource.data.quantity_used is number &&
+        request.resource.data.quantity_used > 0 &&
+        request.resource.data.old_quantity is number &&
+        request.resource.data.new_quantity is number &&
+        request.resource.data.old_quantity == get(/databases/$(database)/documents/items/$(request.resource.data.item_id)).data.quantity &&
+        request.resource.data.old_quantity - request.resource.data.quantity_used == request.resource.data.new_quantity &&
+        getAfter(/databases/$(database)/documents/items/$(request.resource.data.item_id)).data.quantity == request.resource.data.new_quantity &&
+        request.resource.data.timestamp == request.time;
+
+      // Audit logs are permanent and strictly immutable
+      allow update, delete: if false;
+    }
+
+    // =========================================================================
+    // 4. QUOTATIONS (/quotations/{quotationId})
+    // =========================================================================
+    match /quotations/{quotationId} {
+      // Owner only: contains customer emails, total pricing, and proposals
+      allow read, write: if isOwner();
+    }
+
+    // =========================================================================
+    // 5. QUOTATION ITEMS (/quotation_items/{itemId})
+    // =========================================================================
+    match /quotation_items/{itemId} {
+      // Owner only: legacy normalized line-item rows
+      allow read, write: if isOwner();
+    }
+
+    // =========================================================================
+    // 6. DEFAULT DENY
+    // =========================================================================
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
